@@ -1,8 +1,9 @@
 export module test_main;
 
 import std;
-import devlib.smart_handles;
 import <cassert>;
+import devlib.smart_handle;
+
 
 // A mock object that tracks how many times its destructor is called.
 struct mock_destructor_tracker {
@@ -87,8 +88,30 @@ void run_stress_test() {
     assert(creation_counter.load() == destruction_counter.load() && "Destruction count mismatch!");
 }
 
+void run_rc_test() {
+    // not atomic
+    dev_lib::strong_rc_handle<mock_destructor_tracker> strong_handle = dev_lib::make_shared_rc<mock_destructor_tracker>(new std::atomic<int>(0));
+
+    std::vector<dev_lib::weak_rc_handle<mock_destructor_tracker>> weak_handles;
+
+    for (int i = 0; i < 10; ++i) {
+        weak_handles.push_back(strong_handle.share_weak());
+    }
+
+    for (auto &weak : weak_handles) {
+        auto locked = weak.lock();
+        assert(locked && "Failed to lock weak handle!");
+    }
+
+
+}
+
 export int main() {
     std::println("Starting aggressive memory order stress test...");
     run_stress_test();
+
+    dev_lib::strong_arc_handle<mock_destructor_tracker> strong_handle = dev_lib::make_shared_arc<mock_destructor_tracker>(new std::atomic<int>(0));
+
+    run_rc_test();
     std::println("Stress test complete.");
 }
