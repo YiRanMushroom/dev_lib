@@ -254,6 +254,10 @@ namespace dev_lib {
             return m_handle.has_value();
         }
 
+        bool has_value() const noexcept {
+            return m_handle.has_value();
+        }
+
 #if Do_Optimization
         strong_arc_handle clone() const noexcept {
             return strong_arc_handle(*this);
@@ -620,6 +624,10 @@ namespace dev_lib {
             return m_handle.has_value();
         }
 
+        bool has_value() const noexcept {
+            return m_handle.has_value();
+        }
+
         weak_rc_handle<t_handle_type, t_info_type> share_weak() const noexcept;
 
         strong_rc_handle clone() const noexcept {
@@ -817,6 +825,10 @@ namespace dev_lib {
         }
 
         operator bool() const noexcept {
+            return m_handle.has_value();
+        }
+
+        bool has_value() const noexcept {
             return m_handle.has_value();
         }
 
