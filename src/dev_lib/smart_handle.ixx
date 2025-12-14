@@ -208,54 +208,47 @@ namespace dev_lib {
 
         template<implicitly_convertible_from<V> T>
         operator rebind_managed_type<T>(this const my_managed_type &self) noexcept {
-            bool should_construct = self.ensure_has_underlying_control_block();
-            if (!should_construct) {
+            auto cb = self.m_control_block.load(std::memory_order_relaxed);
+            if (!cb) {
                 return rebind_managed_type<T>();
             }
 
-            return rebind_managed_type<T>(self.m_control_block.load(std::memory_order_relaxed),
-                                          self.m_handle, auto_increment_tag{});
+            return rebind_managed_type<T>(cb, self.m_handle, auto_increment_tag{});
         }
 
         template<explicitly_convertible_from<V> T>
         explicit operator rebind_managed_type<T>(this const my_managed_type &self) noexcept {
-            bool should_construct = self.ensure_has_underlying_control_block();
-            if (!should_construct) {
+            auto cb = self.m_control_block.load(std::memory_order_relaxed);
+            if (!cb) {
                 return rebind_managed_type<T>();
             }
 
-            return rebind_managed_type<T>(self.m_control_block.load(std::memory_order_relaxed),
-                                          rebind_unmanaged_type<T>(self.m_handle), auto_increment_tag{});
+            return rebind_managed_type<T>(cb, rebind_unmanaged_type<T>(self.m_handle), auto_increment_tag{});
         }
 
         template<convertible_from<V> T>
         rebind_managed_type<T> static_pointer_cast(this const my_managed_type &self) noexcept {
-            bool should_construct = self.ensure_has_underlying_control_block();
-            if (!should_construct) {
+            auto cb = self.m_control_block.load(std::memory_order_relaxed);
+            if (!cb) {
                 return rebind_managed_type<T>();
             }
 
-            return rebind_managed_type<T>(self.m_control_block.load(std::memory_order_relaxed),
-                                          self.m_handle.template static_pointer_cast<T>(), auto_increment_tag{});
+            return rebind_managed_type<T>(cb, self.m_handle.template static_pointer_cast<T>(), auto_increment_tag{});
         }
 
         template<std::derived_from<V> T>
         rebind_managed_type<T> dynamic_pointer_cast(this const my_managed_type &self) noexcept {
-            bool should_construct = self.ensure_has_underlying_control_block();
-
-            if (!should_construct) {
+            auto cb = self.m_control_block.load(std::memory_order_relaxed);
+            if (!cb) {
                 return rebind_managed_type<T>();
             }
 
             auto casted_handle = self.m_handle.template dynamic_pointer_cast<T>();
-
             if (!casted_handle) {
                 return rebind_managed_type<T>();
             }
 
-            return rebind_managed_type<T>(self.m_control_block.load(std::memory_order_relaxed),
-                                          std::move(casted_handle),
-                                          auto_increment_tag{});
+            return rebind_managed_type<T>(cb, std::move(casted_handle), auto_increment_tag{});
         }
     };
 
@@ -448,16 +441,17 @@ namespace dev_lib {
         strong_arc_handle() noexcept = default;
 
         strong_arc_handle(handle_type handle) noexcept
-            : m_handle(handle) {}
+            : m_handle(handle) {
+            if (info_type::has_value(m_handle)) {
+                control_block_type *cb = static_allocator::allocate_and_construct();
+                m_control_block.store(cb, std::memory_order_relaxed);
+            }
+        }
 
 
         ~strong_arc_handle() noexcept {
             auto cb = m_control_block.exchange(nullptr, std::memory_order_relaxed);
             if (!cb) {
-                // No control block, means the control block is never created, check if handle exists
-                if (info_type::has_value(m_handle)) {
-                    info_type::destroy_handle(std::exchange(m_handle, {}));
-                }
 
                 return;
             }
@@ -475,39 +469,17 @@ namespace dev_lib {
         }
 
         strong_arc_handle(const strong_arc_handle &other) {
-            if (!other.ensure_has_underlying_control_block()) {
-                // both are empty, do nothing
+            auto cb = other.m_control_block.load(std::memory_order_relaxed);
+            if (!cb) {
                 return;
             }
 
-            auto cb = other.m_control_block.load(std::memory_order_relaxed);
-            assert(cb != nullptr);
             cb->add_strong_ref();
             cb->add_weak_ref();
             m_control_block.store(cb, std::memory_order_relaxed);
             m_handle = other.m_handle;
         }
 
-        bool ensure_has_underlying_control_block() const {
-            auto cb = m_control_block.load(std::memory_order_acquire);
-            if (cb) {
-                return true;
-            }
-
-            if (info_type::has_value(m_handle)) {
-                control_block_type *new_cb = static_allocator::allocate_and_construct();
-
-                // Try to set the control block atomically
-                control_block_type *expected = nullptr;
-                if (!m_control_block.compare_exchange_strong(
-                    expected, new_cb, std::memory_order_release, std::memory_order_acquire)) {
-                    // Another thread created the control block first, use it and clean up ours
-                    static_allocator::destroy_and_deallocate(new_cb);
-                }
-                return true;
-            }
-            return false;
-        }
 
         strong_arc_handle(strong_arc_handle &&other) noexcept
             : m_control_block(
@@ -595,25 +567,16 @@ namespace dev_lib {
         weak_arc_handle() noexcept = default;
 
         weak_arc_handle(const strong_arc_handle<t_handle_type, t_info_type> &strong_handle) noexcept {
-            if (!strong_handle.ensure_has_underlying_control_block()) {
-                // both are empty, do nothing
+            auto cb = strong_handle.m_control_block.load(std::memory_order_relaxed);
+            if (!cb) {
                 return;
             }
 
-            auto cb = strong_handle.m_control_block.load(std::memory_order_relaxed);
-            assert(cb != nullptr);
             cb->add_weak_ref();
             m_control_block = cb;
             m_handle = strong_handle.m_handle;
         }
 
-        bool ensure_has_underlying_control_block() const {
-            if (m_control_block) {
-                return true;
-            }
-
-            return false;
-        }
 
         ~weak_arc_handle() noexcept {
             auto cb = std::exchange(m_control_block, nullptr);
@@ -882,15 +845,15 @@ namespace dev_lib {
         strong_rc_handle() noexcept = default;
 
         strong_rc_handle(handle_type handle) noexcept
-            : m_handle(handle) {}
+            : m_handle(handle) {
+            if (info_type::has_value(m_handle)) {
+                m_control_block = static_allocator::allocate_and_construct();
+            }
+        }
 
         ~strong_rc_handle() noexcept {
             auto cb = std::exchange(m_control_block, nullptr);
             if (!cb) {
-                // No control block, means the control block is never created, check if handle exists
-                if (info_type::has_value(m_handle)) {
-                    info_type::destroy_handle(std::exchange(m_handle, {}));
-                }
                 return;
             }
 
@@ -906,22 +869,8 @@ namespace dev_lib {
             }
         }
 
-        bool ensure_has_underlying_control_block() const {
-            if (m_control_block) {
-                return true;
-            }
-
-            if (info_type::has_value(m_handle)) {
-                m_control_block = static_allocator::allocate_and_construct();
-
-                return true;
-            }
-            return false;
-        }
-
         strong_rc_handle(const strong_rc_handle &other) {
-            if (!other.ensure_has_underlying_control_block()) {
-                // both are empty, do nothing
+            if (!other.m_control_block) {
                 return;
             }
 
@@ -1011,8 +960,7 @@ namespace dev_lib {
         weak_rc_handle() noexcept = default;
 
         weak_rc_handle(const strong_rc_handle<t_handle_type, t_info_type> &shared_handle) noexcept {
-            if (!shared_handle.ensure_has_underlying_control_block()) {
-                // both are empty, do nothing
+            if (!shared_handle.m_control_block) {
                 return;
             }
 
@@ -1021,13 +969,6 @@ namespace dev_lib {
             m_handle = shared_handle.m_handle;
         }
 
-        bool ensure_has_underlying_control_block() const {
-            if (m_control_block) {
-                return true;
-            }
-
-            return false;
-        }
 
         ~weak_rc_handle() noexcept {
             auto cb = std::exchange(m_control_block, nullptr);
