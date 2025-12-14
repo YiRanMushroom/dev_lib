@@ -32,6 +32,7 @@ struct mock_destructor_tracker {
 
 struct Base {
     virtual ~Base() = default;
+
     virtual void foo() = 0;
 };
 
@@ -99,8 +100,7 @@ void run_stress_test() {
 
                 if (op_dist(gen) == 0) {
                     // Try to lock a weak handle (safe, as lock() creates a new strong handle)
-                    dev_lib::weak_arc_handle<dev_lib::pointer_handle<mock_destructor_tracker>> weak;
-                    {
+                    dev_lib::weak_arc_handle<dev_lib::pointer_handle<mock_destructor_tracker>> weak; {
                         std::lock_guard lock(pool_mutex);
                         weak = weak_pool[idx];
                     }
@@ -110,8 +110,7 @@ void run_stress_test() {
                     // Replace a weak handle in the pool with a new object
                     auto strong = dev_lib::make_arc_handle<mock_destructor_tracker>(&destruction_counter);
                     creation_counter.fetch_add(1, std::memory_order_relaxed);
-                    auto weak = strong.share_weak();
-                    {
+                    auto weak = strong.share_weak(); {
                         std::lock_guard lock(pool_mutex);
                         weak_pool[idx] = weak;
                     }
@@ -138,7 +137,7 @@ void run_rc_test() {
 
     // Test basic weak handle functionality
     dev_lib::strong_rc_handle<dev_lib::pointer_handle<mock_destructor_tracker>> strong_handle =
-        dev_lib::make_rc_handle<mock_destructor_tracker>(new std::atomic<int>(0));
+            dev_lib::make_rc_handle<mock_destructor_tracker>(new std::atomic<int>(0));
 
     std::vector<dev_lib::weak_rc_handle<dev_lib::pointer_handle<mock_destructor_tracker>>> weak_handles;
 
@@ -146,7 +145,7 @@ void run_rc_test() {
         weak_handles.push_back(strong_handle.share_weak());
     }
 
-    for (auto &weak : weak_handles) {
+    for (auto &weak: weak_handles) {
         auto locked = weak.lock();
         assert(locked && "Failed to lock weak handle!");
     }
@@ -224,7 +223,7 @@ void run_unique_array_test() {
 
     // Test iterator
     int sum = 0;
-    for (auto val : *arr) {
+    for (auto val: *arr) {
         sum += val;
     }
     assert(sum == 0 + 10 + 20 + 30 + 40 && "Iterator sum incorrect");
@@ -261,9 +260,7 @@ void run_shared_array_arc_test() {
 
     // Test weak handle
     auto weak = arr1.share_weak();
-    arr1.reset();
-
-    {
+    arr1.reset(); {
         auto locked = weak.lock();
         assert(locked.has_value() && "Should be able to lock (arr2 still alive)");
         assert((*locked)[0] == 100 && "Value should be preserved");
@@ -280,9 +277,7 @@ void run_shared_array_arc_test() {
 void run_array_with_objects_test() {
     std::println("=== Running Array With Objects Test ===");
 
-    std::atomic<int> destruction_count = 0;
-
-    {
+    std::atomic<int> destruction_count = 0; {
         // Create array of mock objects
         auto arr = dev_lib::make_rc_array<mock_destructor_tracker>(3, &destruction_count);
 
@@ -295,7 +290,7 @@ void run_array_with_objects_test() {
 
         // Test range-based for
         int count = 0;
-        for (auto &obj : *arr) {
+        for (auto &obj: *arr) {
             assert(obj.has_value() && "Object should have value");
             ++count;
         }
@@ -383,7 +378,7 @@ void run_function_handle_test() {
     {
         std::string accumulator;
 
-        auto func = dev_lib::make_rc_function<void(const std::string&)>([&accumulator](const std::string& s) {
+        auto func = dev_lib::make_rc_function<void(const std::string &)>([&accumulator](const std::string &s) {
             accumulator += s;
         });
 
@@ -402,7 +397,7 @@ void run_function_handle_test() {
 
         auto func = dev_lib::make_arc_function<int()>([numbers]() {
             int sum = 0;
-            for (int n : numbers) {
+            for (int n: numbers) {
                 sum += n;
             }
             return sum;
@@ -431,8 +426,8 @@ void run_function_handle_test() {
         std::string s2 = "Second string with more content";
         std::string s3 = "Third string with even more content";
 
-        auto func = dev_lib::make_arc_function<std::string(const std::string&)>(
-            [s1, s2, s3](const std::string& suffix) {
+        auto func = dev_lib::make_arc_function<std::string(const std::string &)>(
+            [s1, s2, s3](const std::string &suffix) {
                 return s1 + " | " + s2 + " | " + s3 + " | " + suffix;
             }
         );
@@ -509,7 +504,7 @@ void run_unique_function_test() {
 
         auto func = dev_lib::make_unique_function<std::string()>([large_str, vec]() {
             int sum = 0;
-            for (int n : vec) sum += n;
+            for (int n: vec) sum += n;
             return large_str + " sum=" + std::to_string(sum);
         });
 
@@ -594,6 +589,66 @@ void run_unique_function_test() {
     std::println("Unique function test passed!\n");
 }
 
+void benchmark_my_shared_and_standard_shared() {
+    // Placeholder for benchmarking code
+    std::println("=== Running Benchmark Test ===");
+
+    std::shared_ptr<std::function<int(int)>> standard_shared_function = std::make_shared<std::function<int(int)>>(
+        [a = 10, b = 5, c = "2341"](int x) { return x * x; }
+    );
+    auto copy = standard_shared_function;
+    auto copy2 = copy;
+
+    std::chrono::steady_clock::time_point start_time = std::chrono::steady_clock::now();
+
+    for (int i = 0; i < 10000000; ++i) {
+        std::shared_ptr<std::function<int(int)>> standard_shared_function = std::make_shared<std::function<int(int)>>(
+            [a = 10, b = 5, c = "2341"](int x) { return x * x; }
+        );
+        auto copy = standard_shared_function;
+        auto copy2 = copy;
+        // auto copy3 = copy2;
+        // auto copy4 = copy3;
+        // auto copy5 = copy4;
+        // auto copy6 = copy5;
+        // auto copy7 = copy6;
+
+        volatile auto result = (*copy2)(i) + standard_shared_function->operator()(i) + copy->operator()(i);
+    }
+
+    std::chrono::steady_clock::time_point end_time = std::chrono::steady_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
+    std::println("Standard shared_ptr function duration: {} ms", duration);
+
+    auto my_shared_function = dev_lib::make_arc_function<int(int)>(
+        [a = 10, b = 5, c = "2341"](int x) { return x * x; }
+    );
+    auto my_copy = my_shared_function;
+    auto my_copy2 = my_copy;
+
+    start_time = std::chrono::steady_clock::now();
+    for (int i = 0; i < 10000000; ++i) {
+        auto my_shared_function = dev_lib::make_arc_function<int(int)>(
+            [a = 10, b = 5, c = "2341"](int x) { return x * x; }
+        );
+
+        auto copy1 = my_shared_function;
+        auto copy2 = copy1;
+        auto copy3 = copy2;
+        // auto copy4 = copy3;
+        // auto copy5 = copy4;
+        // auto copy6 = copy5;
+        // auto copy7 = copy6;
+
+        volatile auto result = my_copy2(i) + my_shared_function(i) + my_copy(i);
+    }
+    end_time = std::chrono::steady_clock::now();
+    duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
+    std::println("My shared function duration: {} ms", duration);
+
+    std::println("Benchmark test completed!\n");
+}
+
 // ============================================================================
 // Main Entry Point
 // ============================================================================
@@ -610,9 +665,12 @@ export int main() {
         run_array_with_objects_test();
         run_array_from_range_test();
         run_function_handle_test();
-        run_unique_function_test();  // Added unique_function tests
+        run_unique_function_test(); // Added unique_function tests
 
         std::println("All tests passed successfully!");
+
+        benchmark_my_shared_and_standard_shared();
+
         return 0;
     } catch (const std::exception &e) {
         std::println("Test failed with exception: {}", e.what());

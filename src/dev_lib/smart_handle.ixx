@@ -1286,8 +1286,11 @@ namespace dev_lib {
 
         // Shallow copy is intentional - ownership is managed by outer smart pointer
         array_handle(const array_handle &) noexcept = default;
+
         array_handle(array_handle &&) noexcept = default;
+
         array_handle &operator=(const array_handle &) noexcept = default;
+
         array_handle &operator=(array_handle &&) noexcept = default;
 
         void destroy() noexcept {
@@ -1434,7 +1437,7 @@ namespace dev_lib {
 
             size_type i = 0;
             try {
-                for (const auto &val : init) {
+                for (const auto &val: init) {
                     allocator_traits::construct(allocator, data + i, val);
                     ++i;
                 }
@@ -1459,7 +1462,7 @@ namespace dev_lib {
 
             size_type i = 0;
             try {
-                for (auto &&val : range) {
+                for (auto &&val: range) {
                     allocator_traits::construct(allocator, data + i, std::forward<decltype(val)>(val));
                     ++i;
                 }
@@ -1485,17 +1488,21 @@ namespace dev_lib {
 
     // Type aliases for array handles
     // unique and arc use sync PMR (global static), rc uses unsync PMR (thread-local)
-    export template<typename T, std::size_t ElementCount = 64, typename allocator_type = array_pmr_allocator<T, ElementCount, true>>
+    export template<typename T, std::size_t ElementCount = 64, typename allocator_type = array_pmr_allocator<T,
+        ElementCount, true>>
     using unique_array = unique_handle<array_handle<T, allocator_type>>;
 
-    export template<typename T, std::size_t ElementCount = 64, typename allocator_type = array_pmr_allocator<T, ElementCount, true>>
+    export template<typename T, std::size_t ElementCount = 64, typename allocator_type = array_pmr_allocator<T,
+        ElementCount, true>>
     using arc_array = strong_arc_handle<array_handle<T, allocator_type>>;
 
-    export template<typename T, std::size_t ElementCount = 64, typename allocator_type = array_pmr_allocator<T, ElementCount, false>>
+    export template<typename T, std::size_t ElementCount = 64, typename allocator_type = array_pmr_allocator<T,
+        ElementCount, false>>
     using rc_array = strong_rc_handle<array_handle<T, allocator_type>>;
 
     // Factory functions for array handles
-    export template<typename T, std::size_t ElementCount = 64, typename allocator_type = array_pmr_allocator<T, ElementCount, true>, typename... Args>
+    export template<typename T, std::size_t ElementCount = 64, typename allocator_type = array_pmr_allocator<T,
+        ElementCount, true>, typename... Args>
     auto make_unique_array(std::size_t count, Args &&... args) {
         using handle_type = array_handle<T, allocator_type>;
         return unique_array<T, ElementCount, allocator_type>(
@@ -1503,7 +1510,8 @@ namespace dev_lib {
         );
     }
 
-    export template<typename T, std::size_t ElementCount = 64, typename allocator_type = array_pmr_allocator<T, ElementCount, true>>
+    export template<typename T, std::size_t ElementCount = 64, typename allocator_type = array_pmr_allocator<T,
+        ElementCount, true>>
     auto make_unique_array(std::initializer_list<T> init) {
         using handle_type = array_handle<T, allocator_type>;
         return unique_array<T, ElementCount, allocator_type>(
@@ -1511,7 +1519,8 @@ namespace dev_lib {
         );
     }
 
-    export template<typename T, std::size_t ElementCount = 64, typename allocator_type = array_pmr_allocator<T, ElementCount, true>, std::ranges::sized_range Range>
+    export template<typename T, std::size_t ElementCount = 64, typename allocator_type = array_pmr_allocator<T,
+        ElementCount, true>, std::ranges::sized_range Range>
         requires std::convertible_to<std::ranges::range_value_t<Range>, T>
     auto make_unique_array(Range &&range) {
         using handle_type = array_handle<T, allocator_type>;
@@ -1520,7 +1529,8 @@ namespace dev_lib {
         );
     }
 
-    export template<typename T, std::size_t ElementCount = 64, typename allocator_type = array_pmr_allocator<T, ElementCount, true>, typename... Args>
+    export template<typename T, std::size_t ElementCount = 64, typename allocator_type = array_pmr_allocator<T,
+        ElementCount, true>, typename... Args>
     auto make_arc_array(std::size_t count, Args &&... args) {
         using handle_type = array_handle<T, allocator_type>;
         return arc_array<T, ElementCount, allocator_type>(
@@ -1528,7 +1538,8 @@ namespace dev_lib {
         );
     }
 
-    export template<typename T, std::size_t ElementCount = 64, typename allocator_type = array_pmr_allocator<T, ElementCount, true>>
+    export template<typename T, std::size_t ElementCount = 64, typename allocator_type = array_pmr_allocator<T,
+        ElementCount, true>>
     auto make_arc_array(std::initializer_list<T> init) {
         using handle_type = array_handle<T, allocator_type>;
         return arc_array<T, ElementCount, allocator_type>(
@@ -1536,7 +1547,8 @@ namespace dev_lib {
         );
     }
 
-    export template<typename T, std::size_t ElementCount = 64, typename allocator_type = array_pmr_allocator<T, ElementCount, true>, std::ranges::sized_range Range>
+    export template<typename T, std::size_t ElementCount = 64, typename allocator_type = array_pmr_allocator<T,
+        ElementCount, true>, std::ranges::sized_range Range>
         requires std::convertible_to<std::ranges::range_value_t<Range>, T>
     auto make_arc_array(Range &&range) {
         using handle_type = array_handle<T, allocator_type>;
@@ -1545,7 +1557,8 @@ namespace dev_lib {
         );
     }
 
-    export template<typename T, std::size_t ElementCount = 64, typename allocator_type = array_pmr_allocator<T, ElementCount, false>, typename... Args>
+    export template<typename T, std::size_t ElementCount = 64, typename allocator_type = array_pmr_allocator<T,
+        ElementCount, false>, typename... Args>
     auto make_rc_array(std::size_t count, Args &&... args) {
         using handle_type = array_handle<T, allocator_type>;
         return rc_array<T, ElementCount, allocator_type>(
@@ -1553,7 +1566,8 @@ namespace dev_lib {
         );
     }
 
-    export template<typename T, std::size_t ElementCount = 64, typename allocator_type = array_pmr_allocator<T, ElementCount, false>>
+    export template<typename T, std::size_t ElementCount = 64, typename allocator_type = array_pmr_allocator<T,
+        ElementCount, false>>
     auto make_rc_array(std::initializer_list<T> init) {
         using handle_type = array_handle<T, allocator_type>;
         return rc_array<T, ElementCount, allocator_type>(
@@ -1561,7 +1575,8 @@ namespace dev_lib {
         );
     }
 
-    export template<typename T, std::size_t ElementCount = 64, typename allocator_type = array_pmr_allocator<T, ElementCount, false>, std::ranges::sized_range Range>
+    export template<typename T, std::size_t ElementCount = 64, typename allocator_type = array_pmr_allocator<T,
+        ElementCount, false>, std::ranges::sized_range Range>
         requires std::convertible_to<std::ranges::range_value_t<Range>, T>
     auto make_rc_array(Range &&range) {
         using handle_type = array_handle<T, allocator_type>;
@@ -1579,13 +1594,18 @@ namespace dev_lib {
     class callable_base {
     public:
         virtual ~callable_base() = default;
-        virtual R invoke(Args... args) = 0;
-        virtual void deallocate_self() noexcept = 0;  // Virtual deallocation
 
-        callable_base(const callable_base&) = delete;
-        callable_base& operator=(const callable_base&) = delete;
-        callable_base(callable_base&&) noexcept = default;
-        callable_base& operator=(callable_base&&) noexcept = default;
+        virtual R invoke(Args... args) = 0;
+
+        virtual void deallocate_self() noexcept = 0; // Virtual deallocation
+
+        callable_base(const callable_base &) = delete;
+
+        callable_base &operator=(const callable_base &) = delete;
+
+        callable_base(callable_base &&) noexcept = default;
+
+        callable_base &operator=(callable_base &&) noexcept = default;
 
     protected:
         callable_base() = default;
@@ -1626,17 +1646,21 @@ namespace dev_lib {
         [[no_unique_address]] allocator_type m_allocator{};
         using allocator_traits = std::allocator_traits<allocator_type>;
 
-        callable_type* m_callable{nullptr};
+        callable_type *m_callable{nullptr};
 
     public:
         shared_function_callable_handle() noexcept = default;
+
         ~shared_function_callable_handle() noexcept = default;
 
         // Shallow copy - ownership is managed by outer smart pointer
-        shared_function_callable_handle(const shared_function_callable_handle&) noexcept = default;
-        shared_function_callable_handle(shared_function_callable_handle&&) noexcept = default;
-        shared_function_callable_handle& operator=(const shared_function_callable_handle&) noexcept = default;
-        shared_function_callable_handle& operator=(shared_function_callable_handle&&) noexcept = default;
+        shared_function_callable_handle(const shared_function_callable_handle &) noexcept = default;
+
+        shared_function_callable_handle(shared_function_callable_handle &&) noexcept = default;
+
+        shared_function_callable_handle &operator=(const shared_function_callable_handle &) noexcept = default;
+
+        shared_function_callable_handle &operator=(shared_function_callable_handle &&) noexcept = default;
 
         void destroy() noexcept {
             if (m_callable) {
@@ -1665,11 +1689,12 @@ namespace dev_lib {
         static shared_function_callable_handle make(F func) {
             shared_function_callable_handle handle;
             using callable_impl_type = callable_impl<F, R, allocator_type, Args...>;
-            using impl_allocator = typename std::allocator_traits<allocator_type>::template rebind_alloc<callable_impl_type>;
+            using impl_allocator = typename std::allocator_traits<allocator_type>::template rebind_alloc<
+                callable_impl_type>;
             using impl_alloc_traits = std::allocator_traits<impl_allocator>;
 
             impl_allocator alloc{};
-            callable_impl_type* ptr = impl_alloc_traits::allocate(alloc, 1);
+            callable_impl_type *ptr = impl_alloc_traits::allocate(alloc, 1);
             try {
                 impl_alloc_traits::construct(alloc, ptr, std::move(func));
             } catch (...) {
@@ -1698,17 +1723,21 @@ namespace dev_lib {
         [[no_unique_address]] allocator_type m_allocator{};
         using allocator_traits = std::allocator_traits<allocator_type>;
 
-        callable_type* m_callable{nullptr};
+        callable_type *m_callable{nullptr};
 
     public:
         unique_function_callable_handle() noexcept = default;
+
         ~unique_function_callable_handle() noexcept = default;
 
         // Shallow copy - ownership is managed by outer smart pointer
-        unique_function_callable_handle(const unique_function_callable_handle&) noexcept = default;
-        unique_function_callable_handle(unique_function_callable_handle&&) noexcept = default;
-        unique_function_callable_handle& operator=(const unique_function_callable_handle&) noexcept = default;
-        unique_function_callable_handle& operator=(unique_function_callable_handle&&) noexcept = default;
+        unique_function_callable_handle(const unique_function_callable_handle &) noexcept = default;
+
+        unique_function_callable_handle(unique_function_callable_handle &&) noexcept = default;
+
+        unique_function_callable_handle &operator=(const unique_function_callable_handle &) noexcept = default;
+
+        unique_function_callable_handle &operator=(unique_function_callable_handle &&) noexcept = default;
 
         void destroy() noexcept {
             if (m_callable) {
@@ -1737,11 +1766,12 @@ namespace dev_lib {
         static unique_function_callable_handle make(F func) {
             unique_function_callable_handle handle;
             using callable_impl_type = callable_impl<F, R, allocator_type, Args...>;
-            using impl_allocator = typename std::allocator_traits<allocator_type>::template rebind_alloc<callable_impl_type>;
+            using impl_allocator = typename std::allocator_traits<allocator_type>::template rebind_alloc<
+                callable_impl_type>;
             using impl_alloc_traits = std::allocator_traits<impl_allocator>;
 
             impl_allocator alloc{};
-            callable_impl_type* ptr = impl_alloc_traits::allocate(alloc, 1);
+            callable_impl_type *ptr = impl_alloc_traits::allocate(alloc, 1);
             try {
                 // Construct callable_impl in-place
                 impl_alloc_traits::construct(alloc, ptr, std::move(func));
@@ -1763,12 +1793,13 @@ namespace dev_lib {
     struct unique_permissive<unique_function_callable_handle<R, AllocatorType, Args...>> : std::true_type {};
 
     // CRTP specialization for shared function handles (arc/rc) - inject operator()
-    template<typename R, typename AllocType, typename... Args, template<typename, typename...> typename handle_template, typename info_type>
+    template<typename R, typename AllocType, typename... Args, template<typename, typename...> typename handle_template,
+        typename info_type>
     struct common_handle_interface<handle_template<shared_function_callable_handle<R, AllocType, Args...>, info_type>> {
         using derived_type = handle_template<shared_function_callable_handle<R, AllocType, Args...>, info_type>;
         using handle_type = shared_function_callable_handle<R, AllocType, Args...>;
 
-        R operator()(this const derived_type& self, Args... args) {
+        R operator()(this const derived_type &self, Args... args) {
             // Access the m_handle member and call its operator()
             if constexpr (requires { self.m_handle; }) {
                 return self.m_handle(std::forward<Args>(args)...);
@@ -1777,18 +1808,19 @@ namespace dev_lib {
             }
         }
 
-        explicit operator bool(this const derived_type& self) noexcept {
+        explicit operator bool(this const derived_type &self) noexcept {
             return self.has_value();
         }
     };
 
     // CRTP specialization for unique function handles - inject operator()
-    template<typename R, typename AllocType, typename... Args, template<typename, typename...> typename handle_template, typename info_type>
+    template<typename R, typename AllocType, typename... Args, template<typename, typename...> typename handle_template,
+        typename info_type>
     struct common_handle_interface<handle_template<unique_function_callable_handle<R, AllocType, Args...>, info_type>> {
         using derived_type = handle_template<unique_function_callable_handle<R, AllocType, Args...>, info_type>;
         using handle_type = unique_function_callable_handle<R, AllocType, Args...>;
 
-        R operator()(this const derived_type& self, Args... args) {
+        R operator()(this const derived_type &self, Args... args) {
             // Access the m_handle member and call its operator()
             if constexpr (requires { self.m_handle; }) {
                 return self.m_handle(std::forward<Args>(args)...);
@@ -1797,7 +1829,7 @@ namespace dev_lib {
             }
         }
 
-        explicit operator bool(this const derived_type& self) noexcept {
+        explicit operator bool(this const derived_type &self) noexcept {
             return self.has_value();
         }
     };
@@ -1825,7 +1857,8 @@ namespace dev_lib {
         using type = unique_function_pmr_allocator<callable_base<R, Args...>, InlineSize, true>;
     };
 
-    export template<typename Signature, typename Allocator = typename default_unique_function_allocator<Signature>::type>
+    export template<typename Signature, typename Allocator = typename default_unique_function_allocator<
+        Signature>::type>
     struct unique_function_traits;
 
     export template<typename R, typename... Args, typename Allocator>
@@ -1835,7 +1868,8 @@ namespace dev_lib {
         using type = unique_handle<handle_type, unique_handle_info>;
     };
 
-    export template<typename Signature, typename Allocator = typename default_unique_function_allocator<Signature>::type>
+    export template<typename Signature, typename Allocator = typename default_unique_function_allocator<
+        Signature>::type>
     using unique_function = typename unique_function_traits<Signature, Allocator>::type;
 
     // Default allocator for shared functions (not used currently, but for consistency)
@@ -1879,7 +1913,7 @@ namespace dev_lib {
 
     // arc_function factory
     export template<typename Signature, std::size_t BufferSize = 64, typename F>
-    auto make_arc_function(F&& func) {
+    auto make_arc_function(F &&func) {
         using traits = arc_function_traits<Signature, BufferSize>;
         using handle_type = typename traits::handle_type;
         return arc_function<Signature, BufferSize>(handle_type::make(std::forward<F>(func)));
@@ -1887,19 +1921,18 @@ namespace dev_lib {
 
     // rc_function factory
     export template<typename Signature, std::size_t BufferSize = 64, typename F>
-    auto make_rc_function(F&& func) {
+    auto make_rc_function(F &&func) {
         using traits = rc_function_traits<Signature, BufferSize>;
         using handle_type = typename traits::handle_type;
         return rc_function<Signature, BufferSize>(handle_type::make(std::forward<F>(func)));
     }
 
     // unique_function factory - supports custom allocator
-    export template<typename Signature, typename Allocator = typename default_unique_function_allocator<Signature>::type, typename F>
-    auto make_unique_function(F&& func) {
+    export template<typename Signature, typename Allocator = typename default_unique_function_allocator<Signature>::type
+        , typename F>
+    auto make_unique_function(F &&func) {
         using traits = unique_function_traits<Signature, Allocator>;
         using handle_type = typename traits::handle_type;
         return unique_function<Signature, Allocator>(handle_type::make(std::forward<F>(func)));
     }
 }
-
-

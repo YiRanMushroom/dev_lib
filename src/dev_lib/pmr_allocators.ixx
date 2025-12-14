@@ -12,25 +12,28 @@ namespace dev_lib {
     class static_pmr_resource {
     private:
         struct resource_impl {
-            alignas(std::max_align_t) std::byte buffer[BufferSize];
-            std::pmr::monotonic_buffer_resource monotonic{buffer, BufferSize, std::pmr::new_delete_resource()};
             std::conditional_t<Sync,
                 std::pmr::synchronized_pool_resource,
-                std::pmr::unsynchronized_pool_resource> pool{&monotonic};
+                std::pmr::unsynchronized_pool_resource> pool{
+                std::pmr::pool_options{
+                    .max_blocks_per_chunk = 0,
+                    .largest_required_pool_block = BufferSize
+                }
+            };
         };
 
-        static resource_impl& get_sync_resource() {
+        static resource_impl &get_sync_resource() {
             static resource_impl impl;
             return impl;
         }
 
-        static resource_impl& get_unsync_resource() {
+        static resource_impl &get_unsync_resource() {
             thread_local resource_impl impl;
             return impl;
         }
 
     public:
-        static std::pmr::memory_resource* get() {
+        static std::pmr::memory_resource *get() {
             if constexpr (Sync) {
                 return &get_sync_resource().pool;
             } else {
@@ -50,17 +53,17 @@ namespace dev_lib {
         unique_function_pmr_allocator() noexcept = default;
 
         template<typename U>
-        unique_function_pmr_allocator(const unique_function_pmr_allocator<U, BufferSize, Sync>&) noexcept {}
+        unique_function_pmr_allocator(const unique_function_pmr_allocator<U, BufferSize, Sync> &) noexcept {}
 
-        [[nodiscard]] T* allocate(size_type n) {
-            auto* resource = static_pmr_resource<BufferSize, Sync>::get();
-            void* ptr = resource->allocate(n * sizeof(T), alignof(T));
-            return static_cast<T*>(ptr);
+        [[nodiscard]] T *allocate(size_type n) {
+            auto *resource = static_pmr_resource<BufferSize, Sync>::get();
+            void *ptr = resource->allocate(n * sizeof(T), alignof(T));
+            return static_cast<T *>(ptr);
         }
 
-        void deallocate(T* p, size_type n) noexcept {
+        void deallocate(T *p, size_type n) noexcept {
             if (p == nullptr) return;
-            auto* resource = static_pmr_resource<BufferSize, Sync>::get();
+            auto *resource = static_pmr_resource<BufferSize, Sync>::get();
             resource->deallocate(p, n * sizeof(T), alignof(T));
         }
 
@@ -69,8 +72,8 @@ namespace dev_lib {
             using other = unique_function_pmr_allocator<U, BufferSize, Sync>;
         };
 
-        bool operator==(const unique_function_pmr_allocator&) const noexcept { return true; }
-        bool operator!=(const unique_function_pmr_allocator&) const noexcept { return false; }
+        bool operator==(const unique_function_pmr_allocator &) const noexcept { return true; }
+        bool operator!=(const unique_function_pmr_allocator &) const noexcept { return false; }
     };
 
     // PMR allocator for array with element count
@@ -87,17 +90,17 @@ namespace dev_lib {
         array_pmr_allocator() noexcept = default;
 
         template<typename U>
-        array_pmr_allocator(const array_pmr_allocator<U, ElementCount, Sync>&) noexcept {}
+        array_pmr_allocator(const array_pmr_allocator<U, ElementCount, Sync> &) noexcept {}
 
-        [[nodiscard]] T* allocate(size_type n) {
-            auto* resource = static_pmr_resource<buffer_size, Sync>::get();
-            void* ptr = resource->allocate(n * sizeof(T), alignof(T));
-            return static_cast<T*>(ptr);
+        [[nodiscard]] T *allocate(size_type n) {
+            auto *resource = static_pmr_resource<buffer_size, Sync>::get();
+            void *ptr = resource->allocate(n * sizeof(T), alignof(T));
+            return static_cast<T *>(ptr);
         }
 
-        void deallocate(T* p, size_type n) noexcept {
+        void deallocate(T *p, size_type n) noexcept {
             if (p == nullptr) return;
-            auto* resource = static_pmr_resource<buffer_size, Sync>::get();
+            auto *resource = static_pmr_resource<buffer_size, Sync>::get();
             resource->deallocate(p, n * sizeof(T), alignof(T));
         }
 
@@ -106,8 +109,7 @@ namespace dev_lib {
             using other = array_pmr_allocator<U, ElementCount, Sync>;
         };
 
-        bool operator==(const array_pmr_allocator&) const noexcept { return true; }
-        bool operator!=(const array_pmr_allocator&) const noexcept { return false; }
+        bool operator==(const array_pmr_allocator &) const noexcept { return true; }
+        bool operator!=(const array_pmr_allocator &) const noexcept { return false; }
     };
 }
-
