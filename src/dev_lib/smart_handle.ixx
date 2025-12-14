@@ -208,7 +208,7 @@ namespace dev_lib {
 
         template<implicitly_convertible_from<V> T>
         operator rebind_managed_type<T>(this const my_managed_type &self) noexcept {
-            auto cb = self.m_control_block.load(std::memory_order_relaxed);
+            auto cb = self.m_control_block;
             if (!cb) {
                 return rebind_managed_type<T>();
             }
@@ -218,7 +218,7 @@ namespace dev_lib {
 
         template<explicitly_convertible_from<V> T>
         explicit operator rebind_managed_type<T>(this const my_managed_type &self) noexcept {
-            auto cb = self.m_control_block.load(std::memory_order_relaxed);
+            auto cb = self.m_control_block;
             if (!cb) {
                 return rebind_managed_type<T>();
             }
@@ -228,7 +228,7 @@ namespace dev_lib {
 
         template<convertible_from<V> T>
         rebind_managed_type<T> static_pointer_cast(this const my_managed_type &self) noexcept {
-            auto cb = self.m_control_block.load(std::memory_order_relaxed);
+            auto cb = self.m_control_block;
             if (!cb) {
                 return rebind_managed_type<T>();
             }
@@ -238,7 +238,7 @@ namespace dev_lib {
 
         template<std::derived_from<V> T>
         rebind_managed_type<T> dynamic_pointer_cast(this const my_managed_type &self) noexcept {
-            auto cb = self.m_control_block.load(std::memory_order_relaxed);
+            auto cb = self.m_control_block;
             if (!cb) {
                 return rebind_managed_type<T>();
             }
@@ -269,7 +269,7 @@ namespace dev_lib {
     struct static_synchronized_pmr_allocator;
 
     struct atomic_ref_count_info_type {
-        using atomic_counter_type = std::atomic_size_t;
+        using atomic_counter_type = std::atomic_uint32_t;
 
         template<typename handle_type> requires std::is_trivially_copyable_v<handle_type>
                                                 && requires(handle_type h) { h.destroy(); }
@@ -416,8 +416,7 @@ namespace dev_lib {
         using static_allocator = info_type::static_allocator;
 
     private:
-        mutable std::atomic<control_block_type *> m_control_block{nullptr};
-
+        control_block_type *m_control_block{nullptr};
         handle_type m_handle{};
 
         strong_arc_handle(control_block_type *cb, handle_type handle) noexcept
@@ -443,14 +442,13 @@ namespace dev_lib {
         strong_arc_handle(handle_type handle) noexcept
             : m_handle(handle) {
             if (info_type::has_value(m_handle)) {
-                control_block_type *cb = static_allocator::allocate_and_construct();
-                m_control_block.store(cb, std::memory_order_relaxed);
+                m_control_block = static_allocator::allocate_and_construct();
             }
         }
 
 
         ~strong_arc_handle() noexcept {
-            auto cb = m_control_block.exchange(nullptr, std::memory_order_relaxed);
+            auto cb = std::exchange(m_control_block, nullptr);
             if (!cb) {
 
                 return;
@@ -469,22 +467,20 @@ namespace dev_lib {
         }
 
         strong_arc_handle(const strong_arc_handle &other) {
-            auto cb = other.m_control_block.load(std::memory_order_relaxed);
+            auto cb = other.m_control_block;
             if (!cb) {
                 return;
             }
 
             cb->add_strong_ref();
             cb->add_weak_ref();
-            m_control_block.store(cb, std::memory_order_relaxed);
+            m_control_block = cb;
             m_handle = other.m_handle;
         }
 
 
         strong_arc_handle(strong_arc_handle &&other) noexcept
-            : m_control_block(
-                  other.m_control_block.exchange(
-                      nullptr, std::memory_order_relaxed)),
+            : m_control_block(std::exchange(other.m_control_block, nullptr)),
               m_handle(std::exchange(other.m_handle, {})) {}
 
         strong_arc_handle &operator=(const strong_arc_handle &other) noexcept {
@@ -521,7 +517,7 @@ namespace dev_lib {
 
         void reset() noexcept {
             // Destroy handle and control block reference
-            auto cb = m_control_block.exchange(nullptr, std::memory_order_relaxed);
+            auto cb = std::exchange(m_control_block, nullptr);
             if (cb) {
                 bool is_last = cb->release_strong_ref();
                 if (is_last && info_type::has_value(m_handle)) {
@@ -567,7 +563,7 @@ namespace dev_lib {
         weak_arc_handle() noexcept = default;
 
         weak_arc_handle(const strong_arc_handle<t_handle_type, t_info_type> &strong_handle) noexcept {
-            auto cb = strong_handle.m_control_block.load(std::memory_order_relaxed);
+            auto cb = strong_handle.m_control_block;
             if (!cb) {
                 return;
             }
