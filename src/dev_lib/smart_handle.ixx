@@ -3,13 +3,14 @@ export module devlib.smart_handle;
 import std;
 import <cassert>;
 
-#define Do_Optimization 1
-
 namespace dev_lib {
     export struct atomic_ref_count_info_type;
 
     export template<typename info_type = atomic_ref_count_info_type>
     class atomic_reference_counter_control_block;
+
+    export template<typename info_type>
+    struct static_synchronized_pmr_allocator;
 
     struct atomic_ref_count_info_type {
         using atomic_counter_type = std::atomic_size_t;
@@ -20,27 +21,53 @@ namespace dev_lib {
             handle.destroy();
         }
 
-        struct static_allocator {
-        private:
-            static std::pmr::synchronized_pool_resource resource;
+        using static_allocator = static_synchronized_pmr_allocator<atomic_ref_count_info_type>;
+    };
 
-        public:
-            static atomic_reference_counter_control_block<atomic_ref_count_info_type> *allocate();
-
-            static void deallocate(atomic_reference_counter_control_block<atomic_ref_count_info_type> *ptr);
-
-            template<typename... Args>
-            static void construct(atomic_reference_counter_control_block<atomic_ref_count_info_type> *ptr,
-                                  Args &&... args);
-
-            static void destroy(atomic_reference_counter_control_block<atomic_ref_count_info_type> *ptr);
-
-            template<typename... Args>
-            static atomic_reference_counter_control_block<atomic_ref_count_info_type> *allocate_and_construct(
-                Args &&... args);
-
-            static void destroy_and_deallocate(atomic_reference_counter_control_block<atomic_ref_count_info_type> *ptr);
+    template<typename info_type>
+    struct static_synchronized_pmr_allocator {
+    private:
+        inline static std::pmr::synchronized_pool_resource resource{
+            std::pmr::pool_options{
+                .max_blocks_per_chunk = 0,
+                .largest_required_pool_block = sizeof(atomic_reference_counter_control_block<info_type>)
+            }
         };
+
+    public:
+        static atomic_reference_counter_control_block<info_type> *allocate() {
+            void *mem = resource.allocate(sizeof(atomic_reference_counter_control_block<info_type>),
+                                          alignof(atomic_reference_counter_control_block<info_type>));
+            return static_cast<atomic_reference_counter_control_block<info_type> *>(mem);
+        }
+
+        static void deallocate(atomic_reference_counter_control_block<info_type> *ptr) {
+            resource.deallocate(ptr, sizeof(atomic_reference_counter_control_block<info_type>),
+                                alignof(atomic_reference_counter_control_block<info_type>));
+        }
+
+        template<typename... Args>
+        static void construct(atomic_reference_counter_control_block<info_type> *ptr,
+                              Args &&... args) {
+            new(ptr) atomic_reference_counter_control_block<info_type>(std::forward<Args>(args)...);
+        }
+
+        static void destroy(atomic_reference_counter_control_block<info_type> *ptr) {
+            ptr->~atomic_reference_counter_control_block<info_type>();
+        }
+
+        template<typename... Args>
+        static atomic_reference_counter_control_block<info_type> *allocate_and_construct(
+            Args &&... args) {
+            auto ptr = allocate();
+            construct(ptr, std::forward<Args>(args)...);
+            return ptr;
+        }
+
+        static void destroy_and_deallocate(atomic_reference_counter_control_block<info_type> *ptr) {
+            destroy(ptr);
+            deallocate(ptr);
+        }
     };
 
     template<typename t_info_type>
@@ -96,51 +123,6 @@ namespace dev_lib {
             return nullptr;
         }
     };
-
-    std::pmr::synchronized_pool_resource atomic_ref_count_info_type::static_allocator::resource{
-        std::pmr::pool_options{
-            .max_blocks_per_chunk = 0,
-            .largest_required_pool_block = sizeof(atomic_reference_counter_control_block<atomic_ref_count_info_type>)
-        }
-    };
-
-    atomic_reference_counter_control_block<atomic_ref_count_info_type> *atomic_ref_count_info_type::static_allocator::
-    allocate() {
-        void *mem = resource.allocate(sizeof(atomic_reference_counter_control_block<atomic_ref_count_info_type>),
-                                      alignof(atomic_reference_counter_control_block<atomic_ref_count_info_type>));
-        return static_cast<atomic_reference_counter_control_block<atomic_ref_count_info_type> *>(mem);
-    }
-
-    void atomic_ref_count_info_type::static_allocator::deallocate(
-        atomic_reference_counter_control_block<atomic_ref_count_info_type> *ptr) {
-        resource.deallocate(ptr, sizeof(atomic_reference_counter_control_block<atomic_ref_count_info_type>),
-                            alignof(atomic_reference_counter_control_block<atomic_ref_count_info_type>));
-    }
-
-    void atomic_ref_count_info_type::static_allocator::destroy(
-        atomic_reference_counter_control_block<atomic_ref_count_info_type> *ptr) {
-        ptr->~atomic_reference_counter_control_block<atomic_ref_count_info_type>();
-    }
-
-    void atomic_ref_count_info_type::static_allocator::destroy_and_deallocate(
-        atomic_reference_counter_control_block<atomic_ref_count_info_type> *ptr) {
-        destroy(ptr);
-        deallocate(ptr);
-    }
-
-    template<typename... Args>
-    void atomic_ref_count_info_type::static_allocator::construct(
-        atomic_reference_counter_control_block<atomic_ref_count_info_type> *ptr, Args &&... args) {
-        new(ptr) atomic_reference_counter_control_block<atomic_ref_count_info_type>(std::forward<Args>(args)...);
-    }
-
-    template<typename... Args>
-    atomic_reference_counter_control_block<atomic_ref_count_info_type> *atomic_ref_count_info_type::static_allocator::
-    allocate_and_construct(Args &&... args) {
-        auto ptr = allocate();
-        construct(ptr, std::forward<Args>(args)...);
-        return ptr;
-    }
 
     export template<typename t_handle_type, typename t_info_type = atomic_ref_count_info_type>
         requires std::is_trivially_copyable_v<t_handle_type>
@@ -305,7 +287,7 @@ namespace dev_lib {
     public:
         using info_type = t_info_type;
         using control_block_type = atomic_reference_counter_control_block<info_type>;
-        using static_allocator = typename info_type::static_allocator;
+        using static_allocator = info_type::static_allocator;
         using handle_type = t_handle_type;
 
     private:
@@ -456,6 +438,52 @@ namespace dev_lib {
     export template<typename info_type = ref_count_info_type>
     class reference_counter_control_block;
 
+    export template<typename info_type>
+    struct static_unsynchronized_pmr_allocator {
+    private:
+        inline static std::pmr::unsynchronized_pool_resource resource{
+            std::pmr::pool_options{
+                .max_blocks_per_chunk = 0,
+                .largest_required_pool_block = sizeof(reference_counter_control_block<info_type>)
+            }
+        };
+
+    public:
+        static reference_counter_control_block<info_type> *allocate() {
+            void *mem = resource.allocate(sizeof(reference_counter_control_block<info_type>),
+                                          alignof(reference_counter_control_block<info_type>));
+            return static_cast<reference_counter_control_block<info_type> *>(mem);
+        }
+
+        static void deallocate(reference_counter_control_block<info_type> *ptr) {
+            resource.deallocate(ptr, sizeof(reference_counter_control_block<info_type>),
+                                alignof(reference_counter_control_block<info_type>));
+        }
+
+        template<typename... Args>
+        static void construct(reference_counter_control_block<info_type> *ptr,
+                              Args &&... args) {
+            new(ptr) reference_counter_control_block<info_type>(std::forward<Args>(args)...);
+        }
+
+        static void destroy(reference_counter_control_block<info_type> *ptr) {
+            ptr->~reference_counter_control_block<info_type>();
+        }
+
+        template<typename... Args>
+        static reference_counter_control_block<info_type> *allocate_and_construct(
+            Args &&... args) {
+            auto ptr = allocate();
+            construct(ptr, std::forward<Args>(args)...);
+            return ptr;
+        }
+
+        static void destroy_and_deallocate(reference_counter_control_block<info_type> *ptr) {
+            destroy(ptr);
+            deallocate(ptr);
+        }
+    };
+
     struct ref_count_info_type {
         using counter_type = std::size_t;
 
@@ -465,24 +493,7 @@ namespace dev_lib {
             handle.destroy();
         }
 
-        struct static_allocator {
-            static std::pmr::unsynchronized_pool_resource resource;
-
-            template<typename... Args>
-            static reference_counter_control_block<ref_count_info_type> *allocate();
-
-            static void deallocate(reference_counter_control_block<ref_count_info_type> *ptr);
-
-            template<typename... Args>
-            static void construct(reference_counter_control_block<ref_count_info_type> *ptr, Args &&... args);
-
-            static void destroy(reference_counter_control_block<ref_count_info_type> *ptr);
-
-            template<typename... Args>
-            static reference_counter_control_block<ref_count_info_type> *allocate_and_construct(Args &&... args);
-
-            static void destroy_and_deallocate(reference_counter_control_block<ref_count_info_type> *ptr);
-        };
+        using static_allocator = static_unsynchronized_pmr_allocator<ref_count_info_type>;
     };
 
 
@@ -777,49 +788,6 @@ namespace dev_lib {
         }
     };
 
-    std::pmr::unsynchronized_pool_resource ref_count_info_type::static_allocator::resource{
-        std::pmr::pool_options{
-            .max_blocks_per_chunk = 0,
-            .largest_required_pool_block = sizeof(reference_counter_control_block<ref_count_info_type>)
-        }
-    };
-
-    template<typename... Args>
-    reference_counter_control_block<ref_count_info_type> *ref_count_info_type::static_allocator::allocate() {
-        void *mem = resource.allocate(sizeof(reference_counter_control_block<ref_count_info_type>),
-                                      alignof(reference_counter_control_block<ref_count_info_type>));
-        return static_cast<reference_counter_control_block<ref_count_info_type> *>(mem);
-    }
-
-    template<typename... Args>
-    void ref_count_info_type::static_allocator::construct(reference_counter_control_block<ref_count_info_type> *ptr,
-                                                          Args &&... args) {
-        new(ptr) reference_counter_control_block<ref_count_info_type>(std::forward<Args>(args)...);
-    }
-
-    template<typename... Args>
-    reference_counter_control_block<ref_count_info_type> *ref_count_info_type::static_allocator::
-    allocate_and_construct(Args &&... args) {
-        auto ptr = allocate();
-        construct(ptr, std::forward<Args>(args)...);
-        return ptr;
-    }
-
-    void ref_count_info_type::static_allocator::deallocate(reference_counter_control_block<ref_count_info_type> *ptr) {
-        resource.deallocate(ptr, sizeof(reference_counter_control_block<ref_count_info_type>),
-                            alignof(reference_counter_control_block<ref_count_info_type>));
-    }
-
-    void ref_count_info_type::static_allocator::destroy(reference_counter_control_block<ref_count_info_type> *ptr) {
-        ptr->~reference_counter_control_block<ref_count_info_type>();
-    }
-
-    void ref_count_info_type::static_allocator::destroy_and_deallocate(
-        reference_counter_control_block<ref_count_info_type> *ptr) {
-        destroy(ptr);
-        deallocate(ptr);
-    }
-
 
     template<typename t_handle_type, typename t_info_type> requires std::is_trivially_copyable_v<t_handle_type>
     weak_rc_handle<t_handle_type, t_info_type> strong_rc_handle<t_handle_type, t_info_type>::
@@ -933,3 +901,4 @@ namespace dev_lib {
         return unique_handle<t_handle_type, t_info_type>(t_handle_type(std::forward<Args>(args)...));
     }
 }
+
